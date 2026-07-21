@@ -1,0 +1,40 @@
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
+import 'supabase_config.dart';
+
+const _uuid = Uuid();
+
+/// خدمة موحّدة لرفع الملفات (صور/فيديو/صوت) إلى Supabase Storage،
+/// وإرجاع رابط عام (Public URL) دائم بدل المسار المحلي المؤقت
+/// (blob:) اللي يختفي بمجرد تغيير الجهاز أو المتصفح.
+///
+/// المخازن (Buckets) المتوقع وجودها بمشروع Supabase (راجع خطوات الإعداد):
+/// - covers  : صور الأغلفة، الخلفيات العامة، المعرض، صور التساقط، العناصر المتحركة
+/// - videos  : فيديوهات الكشف
+/// - audio   : الموسيقى الخلفية
+class StorageService {
+  StorageService._();
+
+  /// يرفع صورة/فيديو (XFile من image_picker) ويرجع الرابط العام
+  static Future<String> uploadXFile(XFile file, {required String bucket}) async {
+    final bytes = await file.readAsBytes();
+    return _upload(bucket: bucket, bytes: bytes, originalName: file.name);
+  }
+
+  /// يرفع بايتات جاهزة (مثلاً من file_picker) ويرجع الرابط العام
+  static Future<String> uploadBytes(Uint8List bytes, String originalName, {required String bucket}) {
+    return _upload(bucket: bucket, bytes: bytes, originalName: originalName);
+  }
+
+  static Future<String> _upload({
+    required String bucket,
+    required Uint8List bytes,
+    required String originalName,
+  }) async {
+    final ext = originalName.contains('.') ? originalName.split('.').last : 'bin';
+    final path = '${_uuid.v4()}.$ext';
+    await supabase.storage.from(bucket).uploadBinary(path, bytes);
+    return supabase.storage.from(bucket).getPublicUrl(path);
+  }
+}
