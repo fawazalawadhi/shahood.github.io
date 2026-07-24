@@ -76,8 +76,52 @@ create policy "insert own templates" on public.templates for insert with check (
     select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
   ))
 );
-create policy "update own templates" on public.templates for update using (auth.uid() = owner_user_id);
-create policy "delete own templates" on public.templates for delete using (auth.uid() = owner_user_id);
+-- تحديث/حذف: صاحب القالب الخاص، أو الأدمن لأي قالب (خاصة القوالب العامة اللي owner_user_id فيها فاضي)
+create policy "update own or admin templates" on public.templates for update using (
+  auth.uid() = owner_user_id
+  or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+create policy "delete own or admin templates" on public.templates for delete using (
+  auth.uid() = owner_user_id
+  or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+);
+
+-- ============================================
+-- حد أقصى 3 قوالب خاصة لكل مستخدم عادي (الأدمن مستثنى)
+-- كانت موثّقة كـ"مطبّقة" لكنها لم تكن موجودة فعلياً بهذا الملف - أُضيفت الآن.
+-- ============================================
+create or replace function public.enforce_template_limit()
+returns trigger as $$
+declare
+  is_caller_admin boolean;
+  current_count integer;
+begin
+  -- القوالب العامة (is_system_template = true) غير محدودة أصلاً (الأدمن فقط يقدر يدرجها - مضمون بسياسة insert)
+  if new.is_system_template then
+    return new;
+  end if;
+
+  select (role = 'admin') into is_caller_admin from public.profiles where id = new.owner_user_id;
+  if coalesce(is_caller_admin, false) then
+    return new;
+  end if;
+
+  select count(*) into current_count
+  from public.templates
+  where owner_user_id = new.owner_user_id and is_system_template = false;
+
+  if current_count >= 3 then
+    raise exception 'الحد الأقصى 3 قوالب خاصة لكل مستخدم';
+  end if;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists trg_enforce_template_limit on public.templates;
+create trigger trg_enforce_template_limit
+  before insert on public.templates
+  for each row execute procedure public.enforce_template_limit();
 
 -- invitations: الدعوة المنشورة يقدر أي زائر يشوفها (رابط عام)، بس صاحبها بس يعدّل/يحذف
 create policy "anyone can view published invitations" on public.invitations for select using (true);
@@ -106,3 +150,25 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================
+-- صلاحيات مخازن الملفات (Storage) — كانت مفقودة بالكامل!
+-- ملاحظة مهمة: تفعيل "Public bucket" من الواجهة يكفي وحده للعرض/التحميل
+-- (Supabase يتجاوز RLS تماماً لملفات المخازن العامة عند الجلب برابط معروف).
+-- لا تضف policy من نوع "select" هنا: هذا النوع تحديداً يفتح صلاحية استعراض/جرد
+-- كل الملفات بالمخزن (List) لأي حد، وليس له علاقة بجلب ملف تعرف رابطه أصلاً -
+-- وهذا بالضبط ما ينبّه عليه Supabase Security Advisor بتحذير
+-- "Clients can list all files in this bucket". التطبيق لا يستخدم .list() إطلاقاً
+-- (كل الوصول عبر getPublicUrl برابط مباشر)، فلا حاجة لهذا النوع من الصلاحية أبداً.
+-- شغّل هذا الجزء بعد ما تنشئ المخازن الثلاثة (covers, videos, audio) كـ Public.
+-- ============================================
+
+create policy "logged in users can upload covers" on storage.objects for insert with check (
+  bucket_id = 'covers' and auth.uid() is not null
+);
+create policy "logged in users can upload videos" on storage.objects for insert with check (
+  bucket_id = 'videos' and auth.uid() is not null
+);
+create policy "logged in users can upload audio" on storage.objects for insert with check (
+  bucket_id = 'audio' and auth.uid() is not null
+);

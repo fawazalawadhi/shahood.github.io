@@ -23,7 +23,9 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggedIn => currentUser != null;
   bool get isAdmin => isLoggedIn && _role == 'admin';
 
-  /// يقرأ صلاحية المستخدم (user/admin) من جدول profiles بعد كل تغيّر بحالة الدخول
+  /// يقرأ صلاحية المستخدم (user/admin) من جدول profiles بعد كل تغيّر بحالة الدخول.
+  /// لو الصف غير موجود (مثلاً فشل الـ trigger التلقائي وقت التسجيل)، ننشئه بأنفسنا
+  /// كحل احتياطي بدل ما نعتمد بالكامل على الـ trigger.
   Future<void> _loadProfileRole() async {
     if (currentUser == null) {
       _role = 'user';
@@ -35,8 +37,14 @@ class AuthProvider extends ChangeNotifier {
           .from('profiles')
           .select('role')
           .eq('id', currentUser!.id)
-          .single();
-      _role = row['role'] as String? ?? 'user';
+          .maybeSingle();
+      if (row == null) {
+        // الصف مفقود (فشل الـ trigger التلقائي) - ننشئه بأنفسنا كحل احتياطي
+        await supabase.from('profiles').insert({'id': currentUser!.id, 'email': currentUser!.email});
+        _role = 'user';
+      } else {
+        _role = row['role'] as String? ?? 'user';
+      }
     } catch (_) {
       _role = 'user';
     }

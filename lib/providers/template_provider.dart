@@ -17,6 +17,9 @@ const _uuid = Uuid();
 class TemplateProvider extends ChangeNotifier {
   final List<TemplateModel> _templates = [];
 
+  bool isLoading = true;
+  String? lastErrorMessage; // لو فشل الاتصال بـ Supabase، نحتفظ برسالة الخطأ للعرض/التشخيص
+
   List<TemplateModel> get all => List.unmodifiable(_templates);
 
   List<TemplateModel> systemTemplates() =>
@@ -35,16 +38,22 @@ class TemplateProvider extends ChangeNotifier {
   /// لقوالب المستخدم الخاصة إذا كان مسجّل دخول ([userId] غير فارغ).
   /// عند فشل الاتصال (مثلاً بيانات Supabase غير مهيأة بعد) يرجع للبذور المحلية.
   Future<void> loadTemplates({String? userId}) async {
+    isLoading = true;
+    lastErrorMessage = null;
+    notifyListeners();
     try {
       final rows = await supabase.from('templates').select();
       _templates
         ..clear()
         ..addAll((rows as List).map((r) => _templateFromRow(r as Map<String, dynamic>)));
       if (_templates.isEmpty) seedIfEmpty();
-      notifyListeners();
-    } catch (_) {
+    } catch (e) {
       // لا يوجد اتصال بقاعدة البيانات بعد (أو الإعدادات غير مكتملة) - نستخدم بذور محلية مؤقتة
+      lastErrorMessage = e.toString();
       seedIfEmpty();
+    } finally {
+      isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -69,11 +78,10 @@ class TemplateProvider extends ChangeNotifier {
       ownerUserId: isPublicTemplate ? null : userId,
       createdAt: DateTime.now(),
     );
-    try {
-      await supabase.from('templates').insert(_templateToRow(template));
-    } catch (_) {
-      // نتابع بالحفظ محلياً حتى لو فشل الاتصال، حتى لا يفقد المستخدم عمله
-    }
+    // لا نضيف القالب محلياً إلا بعد نجاح الحفظ فعلياً بقاعدة البيانات، وإلا
+    // يرى المستخدم "تم الحفظ" رغم أن القالب لم يُحفظ (مثلاً بسبب تجاوز حد
+    // 3 قوالب أو مشكلة اتصال). الخطأ يُرمى للمتصل ليعرضه بشكل صريح.
+    await supabase.from('templates').insert(_templateToRow(template));
     _templates.add(template);
     notifyListeners();
     return template;
@@ -82,19 +90,31 @@ class TemplateProvider extends ChangeNotifier {
   Future<void> renameTemplate(String id, String newName) async {
     final index = _templates.indexWhere((t) => t.id == id);
     if (index == -1) return;
-    _templates[index] = _templates[index].copyWith(name: newName);
+    final previous = _templates[index];
+    _templates[index] = previous.copyWith(name: newName);
     notifyListeners();
     try {
       await supabase.from('templates').update({'name': newName}).eq('id', id);
-    } catch (_) {}
+    } catch (e) {
+      _templates[index] = previous; // تراجع عن التحديث المحلي إن فشل الحفظ فعلياً
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> deleteTemplate(String id) async {
-    _templates.removeWhere((t) => t.id == id);
+    final index = _templates.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+    final removed = _templates[index];
+    _templates.removeAt(index);
     notifyListeners();
     try {
       await supabase.from('templates').delete().eq('id', id);
-    } catch (_) {}
+    } catch (e) {
+      _templates.insert(index, removed); // تراجع عن الحذف المحلي إن فشل الحذف فعلياً
+      notifyListeners();
+      rethrow;
+    }
   }
 
   TemplateModel _templateFromRow(Map<String, dynamic> row) => TemplateModel(

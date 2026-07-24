@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/supabase_config.dart';
 import '../../theme/app_theme.dart';
@@ -126,6 +127,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                   )
                                 : Text(_isSignUpMode ? 'إنشاء الحساب' : 'دخول'),
                           ),
+                          const SizedBox(height: 10),
+                          ElevatedButton(onPressed: auth.isLoading
+                              ? null
+                              : ()async{
+                            await supabase.auth.signInWithOAuth(
+                              OAuthProvider.google,
+                              redirectTo: 'http://localhost:3000'
+                            );
+                          },
+                              child: const Text("تسجيل الدخول عبر جوجل")),
                           const SizedBox(height: 10),
                           TextButton(
                             onPressed: auth.isLoading

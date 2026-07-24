@@ -1,8 +1,7 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/overlay_element.dart';
 import '../theme/app_fonts.dart';
+import 'smart_image.dart';
 
 /// يعرض كل العناصر المتحركة (نص/صورة) فوق الفيديو، بالاعتماد على
 /// [elapsedSeconds] المنقضي منذ بداية تشغيل الفيديو. كل عنصر يبدأ حركته
@@ -79,14 +78,7 @@ class _OverlayImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const fallback = SizedBox.shrink();
-    if (path == null || path!.isEmpty) return fallback;
-    if (path!.startsWith('assets/')) {
-      return Image.asset(path!, errorBuilder: (_, __, ___) => fallback);
-    }
-    if (kIsWeb || path!.startsWith('http') || path!.startsWith('data:')) {
-      return Image.network(path!, errorBuilder: (_, __, ___) => fallback);
-    }
-    return Image.file(File(path!), errorBuilder: (_, __, ___) => fallback);
+    if (path == null || path!.isEmpty) return const SizedBox.shrink();
+    return SmartImage(path: path);
   }
 }

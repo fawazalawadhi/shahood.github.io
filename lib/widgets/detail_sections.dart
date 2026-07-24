@@ -1,38 +1,88 @@
 import 'dart:async';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/invitation_draft.dart';
 import '../models/gallery_layout.dart';
 import '../models/invitation_section.dart';
 import '../models/section_icon_presets.dart';
+import '../services/supabase_config.dart';
 import '../theme/app_fonts.dart';
+import 'smart_image.dart';
 
 /// يبني الويدجت المناسب لكل نوع قسم. يُستدعى لكل قسم مفعّل بالترتيب
 /// المحدد من المستخدم.
-Widget buildSectionWidget(SectionType type, InvitationDraft draft, Color accent) {
+Widget buildSectionWidget(SectionType type, InvitationDraft draft, Color accent, {String? invitationId}) {
+  Widget child;
   switch (type) {
     case SectionType.welcomeNote:
-      return _WelcomeNoteSection(draft: draft, accent: accent);
+      child = _WelcomeNoteSection(draft: draft, accent: accent);
+      break;
     case SectionType.hostNames:
-      return _HostNamesSection(draft: draft, accent: accent);
+      child = _HostNamesSection(draft: draft, accent: accent);
+      break;
     case SectionType.gallery:
-      return _GallerySection(draft: draft, accent: accent);
+      child = _GallerySection(draft: draft, accent: accent);
+      break;
     case SectionType.dateTime:
-      return _DateTimeSection(draft: draft, accent: accent);
+      child = _DateTimeSection(draft: draft, accent: accent);
+      break;
     case SectionType.location:
-      return _LocationSection(draft: draft, accent: accent);
+      child = _LocationSection(draft: draft, accent: accent);
+      break;
     case SectionType.rules:
-      return _RulesSection(draft: draft, accent: accent);
+      child = _RulesSection(draft: draft, accent: accent);
+      break;
     case SectionType.countdown:
-      return _CountdownSection(draft: draft, accent: accent);
+      child = _CountdownSection(draft: draft, accent: accent);
+      break;
     case SectionType.gifts:
-      return _GiftsSection(draft: draft, accent: accent);
+      child = _GiftsSection(draft: draft, accent: accent);
+      break;
     case SectionType.whatsappContact:
-      return _WhatsappSection(draft: draft, accent: accent);
+      child = _WhatsappSection(draft: draft, accent: accent);
+      break;
     case SectionType.rsvp:
-      return _RsvpSection(draft: draft, accent: accent);
+      child = _RsvpSection(draft: draft, accent: accent, invitationId: invitationId);
+      break;
+  }
+
+  final bgPath = draft.sectionBackgroundImage[type.name];
+  if (bgPath == null || bgPath.isEmpty) return child;
+  return _SectionBackgroundWrapper(imagePath: bgPath, child: child);
+}
+
+/// يضيف صورة خلفية اختيارية خلف أي قسم (يُحدَّد لكل قسم على حدة من شاشة
+/// التصميم)، مع طبقة تعتيم فاتحة فوق الصورة حتى يبقى نص القسم مقروءاً
+/// بغضّ النظر عن ألوان/تباين الصورة المختارة.
+class _SectionBackgroundWrapper extends StatelessWidget {
+  final String imagePath;
+  final Widget child;
+  const _SectionBackgroundWrapper({required this.imagePath, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          Positioned.fill(child: SmartImage(path: imagePath, fit: BoxFit.cover)),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white.withOpacity(0.78), Colors.white.withOpacity(0.9)],
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
   }
 }
 
@@ -129,16 +179,11 @@ class _GallerySection extends StatelessWidget {
   const _GallerySection({required this.draft, required this.accent});
 
   Widget _img(String path) {
-    Widget child;
     final fallback = Container(color: Colors.grey.shade300, child: const Icon(Icons.broken_image_outlined, color: Colors.white));
-    if (path.startsWith('assets/')) {
-      child = Image.asset(path, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback);
-    } else if (kIsWeb || path.startsWith('http')) {
-      child = Image.network(path, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback);
-    } else {
-      child = Image.file(File(path), fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallback);
-    }
-    return ClipRRect(borderRadius: BorderRadius.circular(12), child: child);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SmartImage(path: path, fit: BoxFit.cover, errorBuilder: (_) => fallback),
+    );
   }
 
   @override
@@ -210,6 +255,19 @@ class _LocationSection extends StatelessWidget {
   final Color accent;
   const _LocationSection({required this.draft, required this.accent});
 
+  Future<void> _openMap(BuildContext context) async {
+    final url = draft.locationMapUrl?.trim() ?? '';
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !await canLaunchUrl(uri)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رابط الخريطة غير صحيح')));
+      }
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     if ((draft.locationText ?? '').trim().isEmpty) return const SizedBox.shrink();
@@ -225,7 +283,7 @@ class _LocationSection extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: OutlinedButton.icon(
-                onPressed: () {}, // TODO: فتح الرابط عبر url_launcher عند ربطه
+                onPressed: () => _openMap(context),
                 icon: const Icon(Icons.map_outlined, size: 18),
                 label: const Text('فتح الموقع على الخريطة'),
               ),
@@ -379,6 +437,19 @@ class _WhatsappSection extends StatelessWidget {
   final Color accent;
   const _WhatsappSection({required this.draft, required this.accent});
 
+  Future<void> _openWhatsapp(BuildContext context) async {
+    final digitsOnly = (draft.whatsappNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) return;
+    final uri = Uri.parse('https://wa.me/$digitsOnly');
+    if (!await canLaunchUrl(uri)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذّر فتح واتساب')));
+      }
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     if ((draft.whatsappNumber ?? '').trim().isEmpty) return const SizedBox.shrink();
@@ -391,7 +462,7 @@ class _WhatsappSection extends StatelessWidget {
           elevation: 2,
           child: InkWell(
             customBorder: const CircleBorder(),
-            onTap: () {}, // TODO: فتح wa.me/<الرقم> عبر url_launcher عند ربطه
+            onTap: () => _openWhatsapp(context),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Icon(resolveSectionIcon(SectionType.whatsappContact, draft.sectionIconChoice), color: Colors.white, size: 22),
@@ -406,7 +477,8 @@ class _WhatsappSection extends StatelessWidget {
 class _RsvpSection extends StatefulWidget {
   final InvitationDraft draft;
   final Color accent;
-  const _RsvpSection({required this.draft, required this.accent});
+  final String? invitationId;
+  const _RsvpSection({required this.draft, required this.accent, this.invitationId});
 
   @override
   State<_RsvpSection> createState() => _RsvpSectionState();
@@ -415,9 +487,35 @@ class _RsvpSection extends StatefulWidget {
 class _RsvpSectionState extends State<_RsvpSection> {
   bool? _attending;
   int _guestCount = 1;
+  bool _submitting = false;
+  bool _submitted = false;
+  String? _errorMessage;
+
+  Future<void> _submit() async {
+    // بدون invitationId (وضع التصميم/المعاينة أثناء التعديل) نكتفي بعرض
+    // الاختيار محلياً بدون أي إرسال فعلي لقاعدة البيانات.
+    if (widget.invitationId == null || _attending == null) return;
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await supabase.from('rsvp_responses').insert({
+        'invitation_id': widget.invitationId,
+        'attending': _attending,
+        'guest_count': widget.draft.rsvpAllowGuestCount ? _guestCount : null,
+      });
+      if (mounted) setState(() => _submitted = true);
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'تعذّر إرسال ردك، تأكد من اتصالك بالإنترنت وحاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final showSubmit = widget.invitationId != null && !_submitted;
     return _SectionShell(
       draft: widget.draft,
       accent: widget.accent,
@@ -431,27 +529,47 @@ class _RsvpSectionState extends State<_RsvpSection> {
               child: Text(widget.draft.rsvpNote!,
                   textAlign: TextAlign.center, style: AppFonts.style(widget.draft.bodyFontFamily, fontSize: 13, color: Colors.grey)),
             ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _RsvpButton(label: 'سأحضر ✓', selected: _attending == true, color: widget.accent, onTap: () => setState(() => _attending = true)),
-              const SizedBox(width: 10),
-              _RsvpButton(label: 'اعتذر', selected: _attending == false, color: Colors.grey, onTap: () => setState(() => _attending = false)),
-            ],
-          ),
-          if (_attending == true && widget.draft.rsvpAllowGuestCount)
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('عدد المرافقين: '),
-                  IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => setState(() => _guestCount = (_guestCount - 1).clamp(0, 20))),
-                  Text('$_guestCount', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: () => setState(() => _guestCount = (_guestCount + 1).clamp(0, 20))),
-                ],
-              ),
+          if (_submitted)
+            Text('شكراً لك، تم استلام ردك ✓', style: AppFonts.style(widget.draft.bodyFontFamily, fontSize: 14, color: widget.accent, fontWeight: FontWeight.w700))
+          else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _RsvpButton(label: 'سأحضر ✓', selected: _attending == true, color: widget.accent, onTap: _submitting ? null : () => setState(() => _attending = true)),
+                const SizedBox(width: 10),
+                _RsvpButton(label: 'اعتذر', selected: _attending == false, color: Colors.grey, onTap: _submitting ? null : () => setState(() => _attending = false)),
+              ],
             ),
+            if (_attending == true && widget.draft.rsvpAllowGuestCount)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('عدد المرافقين: '),
+                    IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: _submitting ? null : () => setState(() => _guestCount = (_guestCount - 1).clamp(0, 20))),
+                    Text('$_guestCount', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: _submitting ? null : () => setState(() => _guestCount = (_guestCount + 1).clamp(0, 20))),
+                  ],
+                ),
+              ),
+            if (showSubmit && _attending != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: ElevatedButton(
+                  onPressed: _submitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(backgroundColor: widget.accent),
+                  child: _submitting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('إرسال الرد', style: TextStyle(color: Colors.white)),
+                ),
+              ),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              ),
+          ],
         ],
       ),
     );
@@ -462,7 +580,7 @@ class _RsvpButton extends StatelessWidget {
   final String label;
   final bool selected;
   final Color color;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _RsvpButton({required this.label, required this.selected, required this.color, required this.onTap});
 
   @override

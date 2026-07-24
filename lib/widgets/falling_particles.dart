@@ -1,7 +1,6 @@
-import 'dart:io';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'smart_image.dart';
 
 /// تأثير بصري بسيط: مجموعة إيموجي (وردة، قلب، نجمة...) أو صورة PNG مخصصة
 /// تتساقط باستمرار من أعلى الشاشة لأسفلها بحركة وسرعة عشوائية خفيفة،
@@ -70,15 +69,7 @@ class _FallingParticlesState extends State<FallingParticles> with TickerProvider
 
   Widget _particleVisual(_Particle p) {
     if (widget.imagePath != null && widget.imagePath!.isNotEmpty) {
-      final path = widget.imagePath!;
-      final errorFallback = SizedBox(width: p.size, height: p.size);
-      if (path.startsWith('assets/')) {
-        return Image.asset(path, width: p.size, height: p.size, errorBuilder: (_, __, ___) => errorFallback);
-      }
-      if (kIsWeb || path.startsWith('http') || path.startsWith('data:')) {
-        return Image.network(path, width: p.size, height: p.size, errorBuilder: (_, __, ___) => errorFallback);
-      }
-      return Image.file(File(path), width: p.size, height: p.size, errorBuilder: (_, __, ___) => errorFallback);
+      return SmartImage(path: widget.imagePath, width: p.size, height: p.size);
     }
     return Text(p.emoji, style: TextStyle(fontSize: p.size));
   }

@@ -78,6 +78,8 @@ class AdminTemplatesScreen extends StatelessWidget {
 
   void _renameDialog(BuildContext context, String id, String currentName) {
     final controller = TextEditingController(text: currentName);
+    final provider = context.read<TemplateProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -86,18 +88,27 @@ class AdminTemplatesScreen extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
-              context.read<TemplateProvider>().renameTemplate(id, controller.text.trim());
+            onPressed: () async {
+              final newName = controller.text.trim();
               Navigator.pop(ctx);
+              try {
+                await provider.renameTemplate(id, newName);
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('تعذّر حفظ الاسم الجديد، حاول مرة أخرى.')),
+                );
+              }
             },
             child: const Text('حفظ'),
           ),
         ],
       ),
-    );
+    ).then((_) => controller.dispose());
   }
 
   void _confirmDelete(BuildContext context, String id, String name) {
+    final provider = context.read<TemplateProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -107,9 +118,15 @@ class AdminTemplatesScreen extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () {
-              context.read<TemplateProvider>().deleteTemplate(id);
+            onPressed: () async {
               Navigator.pop(ctx);
+              try {
+                await provider.deleteTemplate(id);
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('تعذّر حذف القالب، حاول مرة أخرى.')),
+                );
+              }
             },
             child: const Text('حذف'),
           ),

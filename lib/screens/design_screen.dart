@@ -214,17 +214,26 @@ class _DesignScreenState extends State<DesignScreen> {
         ),
       ),
     );
+    nameController.dispose();
 
     if (result != null && (result['name'] as String).isNotEmpty) {
-      await templates.saveDraftAsTemplate(
-        draft: design.exportSnapshot(),
-        templateName: result['name'] as String,
-        userId: userId,
-        isPublicTemplate: result['public'] as bool,
-        category: result['category'] as EventCategory,
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم حفظ القالب باسم "${result['name']}"')));
+      try {
+        await templates.saveDraftAsTemplate(
+          draft: design.exportSnapshot(),
+          templateName: result['name'] as String,
+          userId: userId,
+          isPublicTemplate: result['public'] as bool,
+          category: result['category'] as EventCategory,
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم حفظ القالب باسم "${result['name']}"')));
+        }
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذّر حفظ القالب. قد تكون وصلت للحد الأقصى (3 قوالب) أو حدثت مشكلة اتصال.')),
+          );
+        }
       }
     }
   }
@@ -253,7 +262,7 @@ class _DesignScreenState extends State<DesignScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('تم نشر الدعوة 🎉'),
-        content: SelectableText('shahooda.com/i/$slug'),
+        content: SelectableText('azzama.com/i/$slug'),
         actions: [ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('تمام'))],
       ),
     );
@@ -908,7 +917,31 @@ class _OverlayEditDialogState extends State<_OverlayEditDialog> {
   }
 }
 
-class _SectionsReorderList extends StatelessWidget {
+class _SectionsReorderList extends StatefulWidget {
+  @override
+  State<_SectionsReorderList> createState() => _SectionsReorderListState();
+}
+
+class _SectionsReorderListState extends State<_SectionsReorderList> {
+  final _picker = ImagePicker();
+  SectionType? _uploadingType;
+
+  Future<void> _pickBackground(BuildContext context, SectionType type) async {
+    final design = context.read<DesignProvider>();
+    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (file == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _uploadingType = type);
+    try {
+      final url = await StorageService.uploadXFile(file, bucket: 'covers');
+      design.setSectionBackgroundImage(type, url);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('تعذّر رفع الصورة: $e')));
+    } finally {
+      if (mounted) setState(() => _uploadingType = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final design = context.read<DesignProvider>();
@@ -924,11 +957,41 @@ class _SectionsReorderList extends StatelessWidget {
           Card(
             key: ValueKey(section.type),
             margin: const EdgeInsets.only(bottom: 8),
-            child: SwitchListTile(
-              value: section.enabled,
-              onChanged: (v) => design.toggleSection(section.type, v),
-              title: Text(section.type.arabicLabel),
-              secondary: const Icon(Icons.drag_handle),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  value: section.enabled,
+                  onChanged: (v) => design.toggleSection(section.type, v),
+                  title: Text(section.type.arabicLabel),
+                  secondary: const Icon(Icons.drag_handle),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.image_outlined, size: 16, color: Colors.grey),
+                      const SizedBox(width: 6),
+                      const Text('صورة خلفية للقسم', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Spacer(),
+                      if (_uploadingType == section.type)
+                        const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      else ...[
+                        if ((draft.sectionBackgroundImage[section.type.name] ?? '').isNotEmpty)
+                          IconButton(
+                            tooltip: 'إزالة الصورة',
+                            icon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                            onPressed: () => design.clearSectionBackgroundImage(section.type),
+                          ),
+                        TextButton.icon(
+                          onPressed: () => _pickBackground(context, section.type),
+                          icon: const Icon(Icons.upload_outlined, size: 16),
+                          label: Text((draft.sectionBackgroundImage[section.type.name] ?? '').isEmpty ? 'إضافة' : 'تغيير'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
       ],

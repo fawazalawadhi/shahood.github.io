@@ -8,7 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// - anonKey: قيمة "anon public" من API Keys
 class SupabaseConfig {
   static const String url = 'https://sayhaiiirpecqioxhcke.supabase.co';
-  static const String anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNheWhhaWlpcnBlY3Fpb3hoY2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MDg0OTgsImV4cCI6MjEwMDA4NDQ5OH0.FdUzBH6mA4ukMbRWKfy6eR9ll1ajF68aD3dSOJC281A";
+  static const String anonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNheWhhaWlpcnBlY3Fpb3hoY2tlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MDg0OTgsImV4cCI6MjEwMDA4NDQ5OH0.FdUzBH6mA4ukMbRWKfy6eR9ll1ajF68aD3dSOJC281A';
 
   /// يُستدعى مرة وحدة عند إقلاع التطبيق (من main.dart)
   static Future<void> initialize() async {

@@ -11,6 +11,7 @@ import '../theme/app_fonts.dart';
 import 'detail_sections.dart';
 import 'falling_particles.dart';
 import 'overlay_elements_layer.dart';
+import 'smart_image.dart';
 
 /// شاشة المعاينة الحية (توضع على يسار شاشة التصميم).
 /// تعرض شكل الدعوة كاملاً كصفحة واحدة قابلة للسكرول الطبيعي:
@@ -159,7 +160,8 @@ class _LivePreviewState extends State<LivePreview> with TickerProviderStateMixin
                                     style: AppFonts.style(draft.namesFontFamily, fontSize: 22, fontWeight: FontWeight.bold, color: accent),
                                   ),
                                   const Divider(height: 30, indent: 40, endIndent: 40),
-                                  for (final section in sections) buildSectionWidget(section.type, draft, accent),
+                                  for (final section in sections)
+                                    buildSectionWidget(section.type, draft, accent, invitationId: design.viewingInvitationId),
                                 ],
                               ),
                             ),
@@ -290,13 +292,11 @@ class _CoverImage extends StatelessWidget {
         child: const Center(child: Icon(Icons.image_outlined, size: 56, color: Colors.white70)),
       );
     }
-    if (path!.startsWith('assets/')) {
-      return Image.asset(path!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _missingImagePlaceholder());
-    }
-    if (kIsWeb || path!.startsWith('http')) {
-      return Image.network(path!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _missingImagePlaceholder());
-    }
-    return Image.file(File(path!), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _missingImagePlaceholder());
+    return SmartImage(
+      path: path,
+      fit: BoxFit.cover,
+      errorBuilder: (_) => _missingImagePlaceholder(),
+    );
   }
 
   Widget _missingImagePlaceholder() {

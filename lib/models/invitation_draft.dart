@@ -77,6 +77,10 @@ class InvitationDraft {
   // -------- تخصيص أيقونات الأقسام: SectionType.name -> فهرس الأيقونة المختارة --------
   Map<String, int> sectionIconChoice;
 
+  // -------- صورة خلفية مخصصة لكل قسم على حدة: SectionType.name -> رابط/مسار الصورة --------
+  // مثلاً وضع صورة القاعة خلف قسم "الموقع"، أو صورة زخرفية خلف قسم "الشعر".
+  Map<String, String> sectionBackgroundImage;
+
   // -------- ربط/نشر --------
   String? baseTemplateId;
   String? slug;
@@ -116,6 +120,7 @@ class InvitationDraft {
     List<SectionConfig>? sections,
     List<OverlayElement>? overlayElements,
     Map<String, int>? sectionIconChoice,
+    Map<String, String>? sectionBackgroundImage,
     this.baseTemplateId,
     this.slug,
     this.isPublished = false,
@@ -123,7 +128,8 @@ class InvitationDraft {
         fallingParticles = fallingParticles ?? [],
         sections = sections ?? SectionConfig.defaults(),
         overlayElements = overlayElements ?? [],
-        sectionIconChoice = sectionIconChoice ?? {};
+        sectionIconChoice = sectionIconChoice ?? {},
+        sectionBackgroundImage = sectionBackgroundImage ?? {};
 
   /// ترتيب الأقسام المفعّلة فقط، جاهزة للعرض بالترتيب الصحيح
   List<SectionConfig> get enabledSectionsInOrder {
@@ -168,6 +174,7 @@ class InvitationDraft {
         'sections': sections.map((s) => s.toJson()).toList(),
         'overlayElements': overlayElements.map((e) => e.toJson()).toList(),
         'sectionIconChoice': sectionIconChoice,
+        'sectionBackgroundImage': sectionBackgroundImage,
         'baseTemplateId': baseTemplateId,
         'slug': slug,
         'isPublished': isPublished,
@@ -213,6 +220,8 @@ class InvitationDraft {
                 .toList() ??
             [],
         sectionIconChoice: (json['sectionIconChoice'] as Map?)?.map((k, v) => MapEntry(k as String, v as int)) ?? {},
+        sectionBackgroundImage:
+            (json['sectionBackgroundImage'] as Map?)?.map((k, v) => MapEntry(k as String, v as String)) ?? {},
         baseTemplateId: json['baseTemplateId'] as String?,
         slug: json['slug'] as String?,
         isPublished: json['isPublished'] as bool? ?? false,

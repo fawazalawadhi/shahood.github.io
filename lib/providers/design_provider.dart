@@ -20,11 +20,25 @@ class DesignProvider extends ChangeNotifier {
 
   InvitationDraft get draft => _draft;
 
+  /// معرّف الدعوة (من جدول public.invitations) وقت عرض دعوة منشورة للزوار،
+  /// null دائماً أثناء وضع "تصميم/تعديل" العادي. يُستخدم فقط لمعرفة أين
+  /// تُحفظ ردود تأكيد الحضور (RSVP).
+  String? viewingInvitationId;
+
+  /// يحمّل دعوة منشورة (بيانات جاهزة قادمة من جدول public.invitations) لعرضها
+  /// للزوار بشكل للقراءة فقط، بدون التأثير على أي دعوة يعدّلها المستخدم حالياً.
+  void loadDraftForViewing(InvitationDraft draft, {required String invitationId}) {
+    _draft = draft;
+    viewingInvitationId = invitationId;
+    notifyListeners();
+  }
+
   void loadFromTemplate(TemplateModel template) {
     _draft = template.draftSnapshot.copy()
       ..baseTemplateId = template.id
       ..isPublished = false
       ..slug = null;
+    viewingInvitationId = null;
     notifyListeners();
   }
 
@@ -34,6 +48,7 @@ class DesignProvider extends ChangeNotifier {
       secondaryColorValue: AppColors.pinkDeep.value,
       backgroundColorValue: AppColors.beige.value,
     );
+    viewingInvitationId = null;
     notifyListeners();
   }
 
@@ -242,6 +257,17 @@ class DesignProvider extends ChangeNotifier {
   // --- تخصيص أيقونات الأقسام ---
   void setSectionIcon(SectionType type, int iconIndex) {
     _draft.sectionIconChoice[type.name] = iconIndex;
+    notifyListeners();
+  }
+
+  // --- صورة خلفية مخصصة لكل قسم ---
+  void setSectionBackgroundImage(SectionType type, String path) {
+    _draft.sectionBackgroundImage[type.name] = path;
+    notifyListeners();
+  }
+
+  void clearSectionBackgroundImage(SectionType type) {
+    _draft.sectionBackgroundImage.remove(type.name);
     notifyListeners();
   }
 
